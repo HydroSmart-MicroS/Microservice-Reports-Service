@@ -14,7 +14,7 @@ import com.hydrosmart.reports.domain.services.ReportRepository;
 class ReportAccessTest {
  final ReportRepository repository=mock(ReportRepository.class);
  final ConsumptionDirectory directory=mock(ConsumptionDirectory.class);
- final ReportCommandServiceImpl service=new ReportCommandServiceImpl(repository,directory,mock(com.hydrosmart.reports.application.internal.outboundservices.PdfReportRenderer.class),Runnable::run);
+ final ReportCommandServiceImpl service=new ReportCommandServiceImpl(repository,directory,mock(com.hydrosmart.reports.application.internal.outboundservices.PdfReportRenderer.class),mock(com.hydrosmart.reports.application.internal.outboundservices.SpreadsheetReportRenderer.class),Runnable::run);
  final UUID unit=UUID.randomUUID(),id=UUID.randomUUID();
  final Instant start=Instant.parse("2026-10-20T05:00:00Z");
 

@@ -31,7 +31,8 @@ public class PgReportRepository implements ReportRepository {
  public void complete(UUID id,UUID request,byte[] content){tx.executeWithoutResult(status->{
   var row=jdbc.queryForMap("SELECT * FROM report_jobs WHERE id=? FOR UPDATE",id);
   if(!"pending".equals(row.get("status"))||!Objects.equals(request,row.get("request_event_id")))return;
-  jdbc.update("INSERT INTO report_artifacts(report_id,content) VALUES(?,?) ON CONFLICT DO NOTHING",id,content);
+  String type=switch(row.get("format").toString()){case "pdf"->"application/pdf";case "xlsx"->"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";default->"text/csv";};
+  jdbc.update("INSERT INTO report_artifacts(report_id,content,content_type) VALUES(?,?,?) ON CONFLICT DO NOTHING",id,content,type);
   jdbc.update("UPDATE report_jobs SET status='completed',completed_at=now(),last_error=NULL WHERE id=?",id);
   event("reports.report.completed.v1",id,row.get("requested_by_user_id").toString(),Map.of("report_id",id.toString(),"user_id",row.get("requested_by_user_id"),"unit_id",row.get("unit_id").toString()));
  });}

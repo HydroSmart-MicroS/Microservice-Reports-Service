@@ -14,7 +14,7 @@ class PdfReportTest {
   var content=new PdfBoxReportRenderer().render(job,data);
   try(var document=Loader.loadPDF(content)){
    assertTrue(document.getNumberOfPages()>1);String text=new PDFTextStripper().getText(document);
-   assertTrue(text.contains("Baño principal"));assertTrue(text.contains("Medidor 119"));assertTrue(text.contains("1200 L"));assertTrue(text.contains("S/ 20.00"));
+   assertTrue(text.contains("Baño principal"));assertTrue(text.contains("Medidor 119"));assertTrue(text.contains("1,200 L"));assertTrue(text.contains("S/ 20.00"));
   }
   Files.createDirectories(Path.of("target/report-previews"));Files.write(Path.of("target/report-previews/hydrosmart-demo.pdf"),content);
  }

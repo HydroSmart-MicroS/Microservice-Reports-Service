@@ -13,7 +13,7 @@ import static org.mockito.Mockito.*;
 class ReportRecoveryTest {
  private final ReportRepository repository=mock(ReportRepository.class);
  private final ConsumptionDirectory directory=mock(ConsumptionDirectory.class);
- private final ReportCommandServiceImpl service=new ReportCommandServiceImpl(repository,directory,mock(com.hydrosmart.reports.application.internal.outboundservices.PdfReportRenderer.class),Runnable::run);
+ private final ReportCommandServiceImpl service=new ReportCommandServiceImpl(repository,directory,mock(com.hydrosmart.reports.application.internal.outboundservices.PdfReportRenderer.class),mock(com.hydrosmart.reports.application.internal.outboundservices.SpreadsheetReportRenderer.class),Runnable::run);
  private final UUID id=UUID.randomUUID(),unit=UUID.randomUUID(),request=UUID.randomUUID();
  private final Instant start=Instant.parse("2026-09-01T05:00:00Z"),end=Instant.parse("2026-10-01T05:00:00Z");
  private Map<String,Object> job(String status){return Map.of("requested_by_user_id","owner","unit_id",unit,"period_start",start,"period_end",end,"status",status,"request_event_id",request);}

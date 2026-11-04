@@ -8,12 +8,13 @@ import com.hydrosmart.reports.domain.services.ReportService;
 import com.hydrosmart.reports.domain.services.ReportRepository;
 import com.hydrosmart.reports.application.internal.outboundservices.ConsumptionDirectory;
 import com.hydrosmart.reports.application.internal.outboundservices.PdfReportRenderer;
+import com.hydrosmart.reports.application.internal.outboundservices.SpreadsheetReportRenderer;
 @Service
 public class ReportCommandServiceImpl implements ReportService {
- private final ReportRepository repository;private final ConsumptionDirectory directory;private final PdfReportRenderer pdf;private final com.hydrosmart.reports.application.internal.outboundservices.AccountGuard guard;
- public ReportCommandServiceImpl(ReportRepository repository,ConsumptionDirectory directory,PdfReportRenderer pdf,com.hydrosmart.reports.application.internal.outboundservices.AccountGuard guard){this.repository=repository;this.directory=directory;this.pdf=pdf;this.guard=guard;}
+ private final ReportRepository repository;private final ConsumptionDirectory directory;private final PdfReportRenderer pdf;private final SpreadsheetReportRenderer spreadsheet;private final com.hydrosmart.reports.application.internal.outboundservices.AccountGuard guard;
+ public ReportCommandServiceImpl(ReportRepository repository,ConsumptionDirectory directory,PdfReportRenderer pdf,SpreadsheetReportRenderer spreadsheet,com.hydrosmart.reports.application.internal.outboundservices.AccountGuard guard){this.repository=repository;this.directory=directory;this.pdf=pdf;this.spreadsheet=spreadsheet;this.guard=guard;}
  public UUID create(String user,UUID unit,Instant from,Instant to,String token,String format){
-  if(!Set.of("csv","pdf").contains(format))throw new IllegalArgumentException("Elige PDF o CSV.");
+  if(!Set.of("csv","pdf","xlsx").contains(format))throw new IllegalArgumentException("Elige Excel, PDF o CSV.");
   if(!from.isBefore(to)||Duration.between(from,to).compareTo(Duration.ofDays(366))>0)throw new IllegalArgumentException("Período inválido.");
   var access=directory.access(unit,token);
   if(access.get("visibleFrom")!=null){var start=Instant.parse(access.get("visibleFrom").toString());if(from.isBefore(start))from=start;}
@@ -50,10 +51,11 @@ public class ReportCommandServiceImpl implements ReportService {
   var job=repository.get(id);if(job.isEmpty()||!"pending".equals(job.get("status"))||!Objects.equals(request,job.get("request_event_id")))return;
   var data=directory.report((UUID)job.get("unit_id"),((Instant)job.get("period_start")).toString(),((Instant)job.get("period_end")).toString());
   if("pdf".equals(job.get("format"))){repository.complete(id,request,pdf.render(job,data));return;}
-  var csv=new StringBuilder("\uFEFFFecha (Lima),Medidor,Litros,Lecturas\r\n");
-  for(var row:(List<Map<String,Object>>)data.get("daily"))csv.append(cell(row.get("date"))).append(',').append(cell(row.getOrDefault("deviceName",row.get("deviceId")))).append(',').append(cell(row.get("liters"))).append(',').append(cell(row.get("readingCount"))).append("\r\n");
+  if("xlsx".equals(job.get("format"))){repository.complete(id,request,spreadsheet.render(job,data));return;}
+  var csv=new StringBuilder("\uFEFFsep=;\r\nFecha (Lima);Medidor;Litros;Lecturas\r\n");
+  for(var row:(List<Map<String,Object>>)data.get("daily"))csv.append(cell(row.get("date"))).append(';').append(cell(row.getOrDefault("deviceName",row.get("deviceId")))).append(';').append(cell(row.get("liters"))).append(';').append(cell(row.get("readingCount"))).append("\r\n");
   var estimate=(Map<String,Object>)data.get("estimate");
-  csv.append("\r\nCosto estimado (PEN),").append(cell(estimate.get("total"))).append("\r\nTarifa,").append(cell(data.get("tariffName"))).append("\r\n");
+  csv.append("\r\nCosto estimado (PEN);").append(cell(estimate.get("total"))).append("\r\nTarifa;").append(cell(data.get("tariffName"))).append("\r\n");
   repository.complete(id,request,csv.toString().getBytes(StandardCharsets.UTF_8));
  }
 }

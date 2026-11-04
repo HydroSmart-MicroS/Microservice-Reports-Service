@@ -22,7 +22,8 @@ public class ReportsController {
  }
  @GetMapping("/api/v1/reports/{id}/download")public ResponseEntity<byte[]> download(@AuthenticationPrincipal Jwt jwt,@RequestHeader("Authorization")String authorization,@PathVariable UUID id){
   var document=service.download(jwt.getSubject(),id,authorization.substring(7));
-  return ResponseEntity.ok().header("Content-Disposition","attachment; filename=\"hydrosmart-"+id+"."+document.format()+"\"").contentType("pdf".equals(document.format())?MediaType.APPLICATION_PDF:MediaType.parseMediaType("text/csv;charset=utf-8")).body(document.content());
+  var type=switch(document.format()){case "pdf"->MediaType.APPLICATION_PDF;case "xlsx"->MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");default->MediaType.parseMediaType("text/csv;charset=utf-8");};
+  return ResponseEntity.ok().header("Content-Disposition","attachment; filename=\"hydrosmart-"+id+"."+document.format()+"\"").contentType(type).body(document.content());
  }
  @ExceptionHandler(com.hydrosmart.reports.shared.infrastructure.messaging.RpcBus.BrokerStatus.class)public ResponseEntity<?> brokerStatus(com.hydrosmart.reports.shared.infrastructure.messaging.RpcBus.BrokerStatus error){return ResponseEntity.status(Set.of(400,403,404,409).contains(error.status)?error.status:503).body(Map.of("detail","No tienes acceso al recurso solicitado."));}
  @ExceptionHandler(IllegalStateException.class)public ResponseEntity<?> unavailable(){return ResponseEntity.status(503).body(Map.of("detail","El servicio no está disponible."));}
