@@ -53,8 +53,9 @@ public class ReportCommandServiceImpl implements ReportService {
   if("pdf".equals(job.get("format"))){repository.complete(id,request,pdf.render(job,data));return;}
   if("xlsx".equals(job.get("format"))){repository.complete(id,request,spreadsheet.render(job,data));return;}
   var csv=new StringBuilder("\uFEFFsep=;\r\nFecha (Lima);Medidor;Litros;Lecturas\r\n");
-  for(var row:(List<Map<String,Object>>)data.get("daily"))csv.append(cell(row.get("date"))).append(';').append(cell(row.getOrDefault("deviceName",row.get("deviceId")))).append(';').append(cell(row.get("liters"))).append(';').append(cell(row.get("readingCount"))).append("\r\n");
+  for(var row:(List<Map<String,Object>>)data.getOrDefault("meterDaily",data.get("daily")))csv.append(cell(row.get("date"))).append(';').append(cell(row.getOrDefault("deviceName",row.get("deviceId")))).append(';').append(cell(row.get("liters"))).append(';').append(cell(row.get("readingCount"))).append("\r\n");
   var estimate=(Map<String,Object>)data.get("estimate");
+  if("GENERAL".equals(data.get("totalSource")))csv.append("\r\nConsumo total de la unidad (L);").append(cell(data.get("liters"))).append("\r\nCriterio;GENERAL define el total. Las zonas son desglose.\r\n");
   csv.append("\r\nCosto estimado (PEN);").append(cell(estimate.get("total"))).append("\r\nTarifa;").append(cell(data.get("tariffName"))).append("\r\n");
   repository.complete(id,request,csv.toString().getBytes(StandardCharsets.UTF_8));
  }
