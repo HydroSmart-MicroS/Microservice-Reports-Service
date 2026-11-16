@@ -17,7 +17,16 @@ public final class RpcBus implements AutoCloseable {
  private final Map<String,Channel> consumers=new ConcurrentHashMap<>();
  private final List<Connection> listeners=new CopyOnWriteArrayList<>();
  private final HttpClient local=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
- public RpcBus(String name){this.name=name;}
+ private final Callable<Connection> outboundFactory;
+ private Connection outgoing;
+ private boolean stopped;
+ public RpcBus(String name){this(name,null);}
+ RpcBus(String name,Callable<Connection> factory){this.name=name;this.outboundFactory=factory==null?()->connect(false):factory;}
+ private synchronized Connection outbound()throws Exception{
+  if(stopped)throw new IOException("Broker client closed");
+  if(outgoing==null||!outgoing.isOpen())outgoing=outboundFactory.call();
+  return outgoing;
+ }
  private Connection connect(boolean recover)throws Exception{return connect(recover,4000);}
  private Connection connect(boolean recover,int timeout)throws Exception{
   var f=new ConnectionFactory();f.setUri(System.getenv("RABBITMQ_URL"));f.setConnectionTimeout(timeout);f.setHandshakeTimeout(timeout);
@@ -30,8 +39,8 @@ public final class RpcBus implements AutoCloseable {
  }
  public Reply request(String service,String method,String path,Map<String,String> headers,Object body){
   if(!Set.of("identity","properties","telemetry","analytics","reports","notifications","billing","config-service").contains(service))throw new IllegalArgumentException("Unknown broker service");
-  try(var connection=connect(false);var ch=connection.createChannel()){
-   var queue=ch.queueDeclare("",false,true,true,null).getQueue();String id=UUID.randomUUID().toString();
+  try(var ch=outbound().createChannel()){
+   var queue=ch.queueDeclare("",false,true,true,Map.of("x-expires",30000)).getQueue();String id=UUID.randomUUID().toString();
    var answer=new CompletableFuture<byte[]>();
    ch.basicConsume(queue,true,(tag,msg)->{if(id.equals(msg.getProperties().getCorrelationId()))answer.complete(msg.getBody());},tag->answer.completeExceptionally(new IOException("Reply consumer cancelled")));
    ch.addReturnListener(r->answer.completeExceptionally(new IOException("RPC route unavailable")));
@@ -75,7 +84,7 @@ public final class RpcBus implements AutoCloseable {
   consumers.put("rpc."+name,ch);
  }
  public void publish(String type,String eventId,byte[] body)throws Exception{
-  try(var c=connect(false);var ch=c.createChannel()){
+  try(var ch=outbound().createChannel()){
    ch.confirmSelect();var returned=new java.util.concurrent.atomic.AtomicBoolean();ch.addReturnListener(r->returned.set(true));
    ch.basicPublish("hydrosmart.events",type,true,new AMQP.BasicProperties.Builder().messageId(eventId).contentType("application/json").deliveryMode(2).build(),body);
    ch.waitForConfirmsOrDie(5000);if(returned.get())throw new IOException("Event has no route");
@@ -120,6 +129,6 @@ public final class RpcBus implements AutoCloseable {
    return Map.of("ready",ready,"connection","UP","consumers",states,"publisherChannel","READY");
   }
  }
- public void close(){for(var c:listeners)try{c.close();}catch(Exception ignored){}}
+ public synchronized void close(){stopped=true;if(outgoing!=null)try{outgoing.close();}catch(Exception ignored){}for(var c:listeners)try{c.close();}catch(Exception ignored){}}
 }
 
