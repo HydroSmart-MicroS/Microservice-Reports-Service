@@ -18,21 +18,24 @@ public class XlsxReportRenderer implements SpreadsheetReportRenderer {
  private static final DateTimeFormatter DATE=DateTimeFormatter.ofPattern("dd MMM uuuu",Locale.forLanguageTag("es-PE")).withZone(ZoneId.of("America/Lima"));
 
  @SuppressWarnings("unchecked") public byte[] render(Map<String,Object> job,Map<String,Object> data){
-  var daily=(List<Map<String,Object>>)data.getOrDefault("daily",List.of());
+  var totalDaily=(List<Map<String,Object>>)data.getOrDefault("daily",List.of());
+  var daily=(List<Map<String,Object>>)data.getOrDefault("meterDaily",totalDaily);
+  var totalIds=new HashSet<String>();totalDaily.forEach(row->totalIds.add(Objects.toString(row.get("deviceId"),"")));
+  String totalFormula="SUMIF(G14:G"+(13+Math.max(1,daily.size()))+",1,";
   var estimate=(Map<String,Object>)data.getOrDefault("estimate",Map.of("total","0"));
-  BigDecimal total=daily.stream().map(row->decimal(row.get("liters"))).reduce(BigDecimal.ZERO,BigDecimal::add);
-  BigDecimal readings=daily.stream().map(row->decimal(row.getOrDefault("readingCount",0))).reduce(BigDecimal.ZERO,BigDecimal::add);
+  BigDecimal total=totalDaily.stream().map(row->decimal(row.get("liters"))).reduce(BigDecimal.ZERO,BigDecimal::add);
+  BigDecimal readings=totalDaily.stream().map(row->decimal(row.getOrDefault("readingCount",0))).reduce(BigDecimal.ZERO,BigDecimal::add);
   long meters=daily.stream().map(row->Objects.toString(row.getOrDefault("deviceId",row.get("deviceName")),"")).distinct().count();
   int last=13+Math.max(1,daily.size()),totals=last+1;
   var sheet=new StringBuilder("<worksheet xmlns=\""+NS+"\" xmlns:r=\""+REL+"\"><sheetPr><pageSetUpPr fitToPage=\"1\"/></sheetPr>");
   sheet.append("<dimension ref=\"A1:G").append(totals+5).append("\"/><sheetViews><sheetView showGridLines=\"0\" zoomScale=\"90\" workbookViewId=\"0\"><pane ySplit=\"13\" topLeftCell=\"B14\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight=\"20\"/>");
-  sheet.append("<cols><col min=\"1\" max=\"1\" width=\"3\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"17\" customWidth=\"1\"/><col min=\"3\" max=\"3\" width=\"35\" customWidth=\"1\"/><col min=\"4\" max=\"5\" width=\"18\" customWidth=\"1\"/><col min=\"6\" max=\"6\" width=\"14\" customWidth=\"1\"/><col min=\"7\" max=\"7\" width=\"3\" customWidth=\"1\"/></cols><sheetData>");
+  sheet.append("<cols><col min=\"1\" max=\"1\" width=\"3\" customWidth=\"1\"/><col min=\"2\" max=\"2\" width=\"17\" customWidth=\"1\"/><col min=\"3\" max=\"3\" width=\"35\" customWidth=\"1\"/><col min=\"4\" max=\"5\" width=\"18\" customWidth=\"1\"/><col min=\"6\" max=\"6\" width=\"14\" customWidth=\"1\"/><col min=\"7\" max=\"7\" width=\"3\" customWidth=\"1\" hidden=\"1\"/></cols><sheetData>");
   row(sheet,2,27,text("B2","HYDROSMART / TU AGUA, EN CLARO",1)+blanks(2,1));
   row(sheet,3,38,text("B3","Reporte de consumo de agua",2)+blanks(3,2));
   row(sheet,5,34,text("B5",Objects.toString(data.get("unitName"),"Unidad seleccionada"),4));
   row(sheet,6,24,text("B6","Del "+DATE.format(Instant.parse(job.get("period_start").toString()))+" al "+DATE.format(Instant.parse(job.get("period_end").toString()).minusSeconds(1))+" · hora de Lima",3));
   row(sheet,8,25,text("B8","CONSUMO DEL PERÍODO",5)+blank("C8",5)+text("D8","MEDIDORES",5)+text("E8","COSTO ESTIMADO",5)+blank("F8",5));
-  row(sheet,9,31,formula("B9","SUM(D14:D"+last+")",total,6)+blank("C9",6)+number("D9",BigDecimal.valueOf(meters),8)+number("E9",decimal(estimate.get("total")),7)+blank("F9",7));
+  row(sheet,9,31,formula("B9",totalFormula+"D14:D"+last+")",total,6)+blank("C9",6)+number("D9",BigDecimal.valueOf(meters),8)+number("E9",decimal(estimate.get("total")),7)+blank("F9",7));
   row(sheet,10,12,blank("B10",6)+blank("C10",6)+blank("D10",8)+blank("E10",7)+blank("F10",7));
   row(sheet,12,28,text("B12","Detalle diario por medidor",4));
   String[] headers={"Fecha (Lima)","Medidor","Consumo (L)","Consumo (m³)","Lecturas"};
@@ -41,13 +44,13 @@ public class XlsxReportRenderer implements SpreadsheetReportRenderer {
    var item=daily.get(i);int r=14+i,offset=i%2==0?0:5;var liters=decimal(item.get("liters"));
    long date=ChronoUnit.DAYS.between(LocalDate.of(1899,12,30),LocalDate.parse(item.get("date").toString()));
    String name=Objects.toString(item.getOrDefault("deviceName",item.get("deviceId")),"Medidor");
-   row(sheet,r,name.length()>35?40:25,number("B"+r,BigDecimal.valueOf(date),10+offset)+text("C"+r,name,11+offset)+number("D"+r,liters,12+offset)+number("E"+r,liters.movePointLeft(3),13+offset)+number("F"+r,decimal(item.getOrDefault("readingCount",0)),14+offset));
+   row(sheet,r,name.length()>35?40:25,number("B"+r,BigDecimal.valueOf(date),10+offset)+text("C"+r,name+(totalIds.contains(Objects.toString(item.get("deviceId"),""))?"":" · desglose"),11+offset)+number("D"+r,liters,12+offset)+number("E"+r,liters.movePointLeft(3),13+offset)+number("F"+r,decimal(item.getOrDefault("readingCount",0)),14+offset)+number("G"+r,totalIds.contains(Objects.toString(item.get("deviceId"),""))?BigDecimal.ONE:BigDecimal.ZERO,0));
   }
   if(daily.isEmpty())row(sheet,14,30,text("C14","Sin lecturas en este período.",11));
-  row(sheet,totals,30,text("B"+totals,"TOTAL",21)+text("C"+totals,daily.size()+" registros diarios",21)+formula("D"+totals,"SUM(D14:D"+last+")",total,20)+formula("E"+totals,"SUM(E14:E"+last+")",total.movePointLeft(3),22)+formula("F"+totals,"SUM(F14:F"+last+")",readings,23));
+  row(sheet,totals,30,text("B"+totals,"TOTAL",21)+text("C"+totals,daily.size()+" registros diarios",21)+formula("D"+totals,totalFormula+"D14:D"+last+")",total,20)+formula("E"+totals,totalFormula+"E14:E"+last+")",total.movePointLeft(3),22)+formula("F"+totals,totalFormula+"F14:F"+last+")",readings,23));
   row(sheet,totals+2,32,text("B"+(totals+2),"Tarifa: "+Objects.toString(data.get("tariffName"),"Tarifas del período"),3));
   row(sheet,totals+3,36,text("B"+(totals+3),"El importe es una estimación del período seleccionado; no es un recibo ni confirma pagos. Consulta Plan y pagos para ver su estado.",3));
-  row(sheet,totals+4,25,text("B"+(totals+4),"Fuente: registros de HydroSmart · datos de consumo simulados · moneda PEN.",3));
+  row(sheet,totals+4,25,text("B"+(totals+4),"GENERAL".equals(data.get("totalSource"))?"GENERAL define el total; las zonas son desglose. Fuente: HydroSmart · datos simulados · PEN.":"Fuente: registros de HydroSmart · datos de consumo simulados · moneda PEN.",3));
   sheet.append("</sheetData><autoFilter ref=\"B13:F").append(last).append("\"/><mergeCells count=\"13\">");
   for(String range:List.of("B2:F2","B3:F3","B5:F5","B6:F6","B8:C8","E8:F8","B9:C10","D9:D10","E9:F10","B12:F12","B"+(totals+2)+":F"+(totals+2),"B"+(totals+3)+":F"+(totals+3),"B"+(totals+4)+":F"+(totals+4)))sheet.append("<mergeCell ref=\"").append(range).append("\"/>");
   sheet.append("</mergeCells><printOptions horizontalCentered=\"1\"/><pageMargins left=\"0.3\" right=\"0.3\" top=\"0.4\" bottom=\"0.4\" header=\"0.2\" footer=\"0.2\"/><pageSetup paperSize=\"9\" orientation=\"landscape\" fitToWidth=\"1\" fitToHeight=\"0\"/><headerFooter><oddFooter>&amp;LHydroSmart · consumo de agua&amp;RPágina &amp;P de &amp;N</oddFooter></headerFooter></worksheet>");
