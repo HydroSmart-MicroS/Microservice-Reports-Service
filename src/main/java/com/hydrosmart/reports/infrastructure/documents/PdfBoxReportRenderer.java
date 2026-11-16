@@ -25,9 +25,10 @@ public class PdfBoxReportRenderer implements PdfReportRenderer {
    var font=PDType0Font.load(document,source,true);
    document.getDocumentInformation().setTitle("HydroSmart · Reporte de consumo de agua");
    document.getDocumentInformation().setAuthor("HydroSmart");
-   var daily=(List<Map<String,Object>>)data.getOrDefault("daily",List.of());
+   var totalDaily=(List<Map<String,Object>>)data.getOrDefault("daily",List.of());
+   var daily=(List<Map<String,Object>>)data.getOrDefault("meterDaily",totalDaily);
    var estimate=(Map<String,Object>)data.getOrDefault("estimate",Map.of("total","0"));
-   BigDecimal total=daily.stream().map(row->new BigDecimal(row.get("liters").toString())).reduce(BigDecimal.ZERO,BigDecimal::add);
+   BigDecimal total=totalDaily.stream().map(row->new BigDecimal(row.get("liters").toString())).reduce(BigDecimal.ZERO,BigDecimal::add);
    long meters=daily.stream().map(row->Objects.toString(row.getOrDefault("deviceId",row.get("deviceName")),"")).distinct().count();
    var writer=new PageWriter(document,font);
    writer.page();
@@ -40,7 +41,8 @@ public class PdfBoxReportRenderer implements PdfReportRenderer {
    writer.metric(218,"COSTO ESTIMADO","S/ "+money(estimate.get("total")));
    writer.metric(392,"MEDIDORES CON DATOS",Long.toString(meters));
    writer.y-=96;
-   writer.chart(daily);
+   writer.chart(totalDaily);
+   if("GENERAL".equals(data.get("totalSource")))writer.paragraph("GENERAL define el total. Las zonas muestran su desglose.",8,MUTED,507);
    writer.paragraph("Detalle diario por medidor",12,INK,507);writer.y-=4;writer.tableHead();
    if(daily.isEmpty())writer.paragraph("No hay lecturas registradas en este período.",10,MUTED,507);
    int index=0;
