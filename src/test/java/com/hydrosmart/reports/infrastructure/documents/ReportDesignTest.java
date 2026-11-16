@@ -54,4 +54,16 @@ class ReportDesignTest {
   String sheet=parts(new XlsxReportRenderer().render(JOB,data)).get("xl/worksheets/sheet1.xml");assertTrue(sheet.contains("Sin lecturas en este período."));
   try(var document=Loader.loadPDF(new PdfBoxReportRenderer().render(JOB,data))){assertTrue(new PDFTextStripper().getText(document).contains("No hay lecturas registradas"));}
  }
+
+ @Test void generalTotalDoesNotAddZoneMeasurements()throws Exception{
+  var general=Map.<String,Object>of("date","2026-11-01","deviceId","general","deviceName","General","liters",100,"readingCount",1);
+  var zone=Map.<String,Object>of("date","2026-11-01","deviceId","bath","deviceName","Baño","liters",60,"readingCount",1);
+  var data=Map.<String,Object>of("daily",List.of(general),"meterDaily",List.of(general,zone),"totalSource","GENERAL","estimate",Map.of("total","5.00"));
+  String sheet=parts(new XlsxReportRenderer().render(JOB,data)).get("xl/worksheets/sheet1.xml");
+  assertTrue(sheet.contains("Baño"));assertTrue(sheet.contains("SUMIF("));assertTrue(sheet.contains("<v>100</v>"));
+  assertFalse(sheet.contains("<v>160</v>"));
+  try(var pdf=Loader.loadPDF(new PdfBoxReportRenderer().render(JOB,data))){
+   String text=new PDFTextStripper().getText(pdf);assertTrue(text.contains("Baño"));assertTrue(text.contains("100 L"));assertFalse(text.contains("160 L"));
+  }
+ }
 }
